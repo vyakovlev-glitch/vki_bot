@@ -1,13 +1,13 @@
 import os
+import time
 import requests
-import redis
 from bs4 import BeautifulSoup
 
 # === НАЛАШТУВАННЯ ===
 URL = "https://vki.vin.ua/%d0%b7%d0%b0%d0%bc%d1%96%d0%bd%d0%b8-%d0%b7%d0%b0%d0%bd%d1%8f%d1%82%d1%8c/"
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-REDIS_URL = os.environ.get("REDIS_URL")
+CHECK_INTERVAL = 1800  # 1800 секунд = 30 хвилин
 # ====================
 
 def get_page_content():
@@ -36,25 +36,25 @@ def send_telegram_message(text):
         print(f"Не вдалося надіслати повідомлення: {e}")
 
 def main():
-    current_content = get_page_content()
-    if current_content is None:
-        return
-
-    # Підключаємось до бази даних Redis на Render
-    r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
-    last_content = r.get("last_vki_content")
-
-    if last_content is None:
-        # Перший запуск
-        r.set("last_vki_content", current_content)
-        send_telegram_message("🤖 Бот успішно запущений на Render та підключений до бази даних!")
-        return
-
-    # Якщо вміст змінився
-    if current_content != last_content:
-        msg = f"🔔 **На сайті ВКІ оновлено заміни занять!**\n\n🔗 Перевірити: {URL}"
-        send_telegram_message(msg)
-        r.set("last_vki_content", current_content)
+    print("Бот запущений на Render Web Service...")
+    send_telegram_message("🤖 Бот успішно запущений у хмарі та починає цілодобовий моніторинг!")
+    
+    # Отримуємо початковий стан сторінки
+    last_content = get_page_content()
+    
+    while True:
+        time.sleep(CHECK_INTERVAL)
+        
+        current_content = get_page_content()
+        if current_content is None:
+            continue
+            
+        # Якщо вміст змінився
+        if current_content != last_content:
+            msg = f"🔔 **На сайті ВКІ оновлено заміни занять!**\n\n🔗 Перевірити: {URL}"
+            send_telegram_message(msg)
+            last_content = current_content
+            print("Виявлено зміни, повідомлення надіслано!")
 
 if __name__ == "__main__":
     main()
